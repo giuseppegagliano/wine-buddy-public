@@ -1,0 +1,14 @@
+[project]
+name = "wine-buddy"
+version = "0.1.0"
+description = "Wine similarity search, recommendations, and food pairing using ML"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "pandas",
+    "requests",
+    "scikit-learn",
+    "seaborn",
+    "matplotlib",
+    "jupyterlab",
+]
