@@ -1,10 +1,12 @@
 
 .DS_Store
 
-# Data files - scrape your own!
-data/
-*.csv
+# Scraped data files - scrape your own!
+/data/
 *.zip
+
+# Zone.Identifier files (Windows/WSL)
+*:Zone.Identifier
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
