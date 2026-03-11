@@ -11,7 +11,7 @@ from requests import Response, Session
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from config import COUNTRY_CODE, WINE_TYPES, column_names
+from uain.config import COUNTRY_CODE, WINE_TYPES, column_names
 
 logger = logging.getLogger(__name__)
 
@@ -79,9 +79,7 @@ class VivinoClient:
         try:
             response.raise_for_status()
         except requests.HTTPError as exc:
-            raise requests.HTTPError(
-                f"Request failed for {url} with status {response.status_code}"
-            ) from exc
+            raise requests.HTTPError(f"Request failed for {url} with status {response.status_code}") from exc
 
     @staticmethod
     def _parse_json(*, response: Response, url: str) -> dict[str, Any]:
@@ -306,8 +304,8 @@ def scrape_ratings(
     ]
 
     for row in wine_df.itertuples(index=False):
-        wine_id = getattr(row, "wine_id")
-        year = getattr(row, "year")
+        wine_id = row.wine_id
+        year = row.year
 
         logger.info("Getting ratings for wine_id=%s year=%s", wine_id, year)
 

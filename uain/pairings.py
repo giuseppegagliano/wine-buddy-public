@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Mapping
+from collections.abc import Mapping
 
 import numpy as np
 import pandas as pd
@@ -14,15 +14,9 @@ def _validate_food_nonaromas(food_nonaromas: Mapping[str, tuple[object, int]]) -
     if missing:
         raise ValueError(f"Missing food non-aroma tastes: {sorted(missing)}")
 
-    invalid = [
-        key
-        for key, value in food_nonaromas.items()
-        if not isinstance(value, tuple) or len(value) < 2
-    ]
+    invalid = [key for key, value in food_nonaromas.items() if not isinstance(value, tuple) or len(value) < 2]
     if invalid:
-        raise ValueError(
-            f"food_nonaromas values must be tuples with score at index 1. Invalid keys: {sorted(invalid)}"
-        )
+        raise ValueError(f"food_nonaromas values must be tuples with score at index 1. Invalid keys: {sorted(invalid)}")
 
 
 def _validate_dataframe_columns(df: pd.DataFrame) -> None:
@@ -41,9 +35,7 @@ def _mark_congruent_pairings(
     of the most defining food taste intensities.
     """
     max_food_score = max(score for _, score in food_nonaromas.values())
-    defining_tastes = [
-        taste for taste, (_, score) in food_nonaromas.items() if score == max_food_score
-    ]
+    defining_tastes = [taste for taste, (_, score) in food_nonaromas.items() if score == max_food_score]
 
     congruent_mask = pd.Series(False, index=df.index)
     for taste in defining_tastes:

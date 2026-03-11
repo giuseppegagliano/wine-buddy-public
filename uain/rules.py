@@ -1,10 +1,18 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Callable, Mapping
 
 import pandas as pd
-from uain.config import (HIGH_THRESHOLD, LOW_THRESHOLD, MEDIUM_THRESHOLD, MIN_CANDIDATE_WINES, REQUIRED_TASTE_COLUMNS, CONTRASTING_RULES)
+
+from uain.config import (
+    HIGH_THRESHOLD,
+    LOW_THRESHOLD,
+    MEDIUM_THRESHOLD,
+    MIN_CANDIDATE_WINES,
+    REQUIRED_TASTE_COLUMNS,
+)
+
 
 @dataclass(frozen=True)
 class RuleResult:
@@ -15,9 +23,7 @@ class RuleResult:
 def _score(profile: Mapping[str, tuple[object, int]], key: str) -> int:
     value = profile.get(key)
     if not isinstance(value, tuple) or len(value) < 2:
-        raise ValueError(
-            f"Invalid profile entry for '{key}'. Expected tuple-like value with score at index 1."
-        )
+        raise ValueError(f"Invalid profile entry for '{key}'. Expected tuple-like value with score at index 1.")
 
     score = value[1]
     if not isinstance(score, int):
