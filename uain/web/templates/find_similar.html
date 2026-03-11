@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Find Similar Wines — Wine Buddy{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <h1>Find Similar Wines</h1>
+  <p class="subtitle">Enter a wine name and discover similar bottles from the catalog.</p>
+</section>
+
+<form method="POST" action="/find-similar" class="search-form">
+  <div class="search-row">
+    <input
+      type="text"
+      name="query"
+      value="{{ query or '' }}"
+      placeholder="e.g. amarone, barolo, prosecco…"
+      autocomplete="off"
+      required
+    >
+    <div class="select-wrap">
+      <select name="k">
+        {% for n in [3, 5, 10, 15, 20] %}
+        <option value="{{ n }}" {% if k == n %}selected{% endif %}>{{ n }} results</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit">Search</button>
+  </div>
+</form>
+
+{% if error %}
+<div class="alert">{{ error }}</div>
+{% endif %}
+
+{% if results %}
+<section class="results">
+  <div class="results-header">
+    <h2>
+      Wines similar to
+      <span class="highlight">{{ results.query_wine.name | replace("-", " ") | title }}</span>
+    </h2>
+    <span class="badge {{ results.query_wine.wine_type }}">{{ results.query_wine.wine_type }}</span>
+    <span class="meta">by {{ results.query_wine.winery | replace("-", " ") | title }}</span>
+    {% if results.candidates > 1 %}
+    <span class="meta muted">({{ results.candidates }} name matches — showing nearest to first)</span>
+    {% endif %}
+  </div>
+
+  <div class="card-grid">
+    {% for wine in results.matches %}
+    <a href="{{ wine.url }}" target="_blank" rel="noopener" class="card">
+      <div class="card-top">
+        <span class="badge small {{ wine.wine_type }}">{{ wine.wine_type }}</span>
+        <span class="card-distance" title="Embedding distance">{{ "%.3f" | format(wine.distance) }}</span>
+      </div>
+      <h3 class="card-name">{{ wine.name | replace("-", " ") | title }}</h3>
+      <p class="card-winery">{{ wine.winery | replace("-", " ") | title }}</p>
+      <div class="card-meta">
+        <span>{{ wine.region | replace("-", " ") | title if wine.region else "—" }}</span>
+        <span>{{ wine.year if wine.year else "N.V." }}</span>
+      </div>
+      <div class="card-rating">
+        <span class="star">&#9733;</span> {{ wine.rating }}
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+{% endblock %}
