@@ -1,6 +1,7 @@
+import os
 from pathlib import Path
 
-ROOT_PATH = Path(__file__).resolve().parent.parent
+ROOT_PATH = Path(os.environ.get("WINE_BUDDY_ROOT", Path(__file__).resolve().parent.parent))
 
 # // ------------------------ GENERAL PARAMS ------------------------------
 column_names = [
