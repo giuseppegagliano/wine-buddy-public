@@ -152,7 +152,10 @@ def cmd_find_wine_like(args: argparse.Namespace) -> None:
     result = wines.iloc[ind[0]].copy()
     result["distance"] = dist[0]
     result = result[result.index != query_idx].head(k)
-    result["url"] = result["wine_seo_name"].apply(lambda name: f"https://www.vivino.com/w/{name}")
+    result["url"] = result.apply(
+        lambda r: "https://www.google.com/search?q=" + "+".join(f"{r['wine_seo_name']} {r['winery_seo_name']}".split()),
+        axis=1,
+    )
 
     display_cols = [
         "wine_seo_name",
