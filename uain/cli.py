@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 from pathlib import Path
 
@@ -16,6 +17,8 @@ from sklearn.preprocessing import StandardScaler
 from uain.config import COUNTRY_CODE, FOOD_WEIGHTS, ROOT_PATH, WINE_WEIGHTS
 from uain.parsing import get_flavour
 from uain.rules import nonaroma_rules
+
+logger = logging.getLogger(__name__)
 
 DATA_DIR = ROOT_PATH / "data"
 REF_DATA_DIR = Path(__file__).resolve().parent / "data"
@@ -58,8 +61,8 @@ def _build_embedding(wines: pd.DataFrame) -> tuple[np.ndarray, pd.DataFrame, lis
 
     id_cols = {"id", "wine_id", "wine_seo_name", "region_country_code", "wine_type"}
     features = [c for c in df.columns if c not in id_cols]
-    # fill any residual NaNs so PCA doesn't blow up
-    df[features] = df[features].fillna(0)
+    # coerce non-numeric values (e.g. 'N.V.' in year) and fill NaNs
+    df[features] = df[features].apply(pd.to_numeric, errors="coerce").fillna(0)
 
     pca = make_pipeline(StandardScaler(), PCA(n_components=2, random_state=0))
     x_embedded = pca.fit_transform(df[features])
@@ -261,6 +264,11 @@ def cmd_pair_wine_to(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
+    logger.info("Data directory: %s", DATA_DIR)
+    logger.info("Reference data directory: %s", REF_DATA_DIR)
+    print("Data directory:", DATA_DIR)
+    print("Reference data directory:", REF_DATA_DIR)
+
     parser = argparse.ArgumentParser(
         prog="wine-buddy",
         description="Wine Buddy CLI — find similar wines and pair wines to food.",
