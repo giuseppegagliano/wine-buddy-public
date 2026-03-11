@@ -12,6 +12,7 @@ dependencies = [
     "matplotlib",
     "jupyterlab",
     "flask>=3.1.3",
+    "gunicorn>=25.1.0",
 ]
 
 [project.scripts]

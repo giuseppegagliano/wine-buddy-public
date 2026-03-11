@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -14,7 +13,7 @@ from sklearn.neighbors import KDTree
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
-from uain.config import COUNTRY_CODE, FOOD_WEIGHTS, ROOT_PATH, WINE_WEIGHTS
+from uain.config import COUNTRY_CODE, DATA_DIR, FOOD_WEIGHTS, WINE_WEIGHTS
 from uain.parsing import get_flavour
 from uain.rules import nonaroma_rules
 
@@ -23,9 +22,6 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
-
-DATA_DIR = ROOT_PATH / "data"
-REF_DATA_DIR = Path(__file__).resolve().parent / "data"
 
 
 # ---------------------------------------------------------------------------
@@ -74,12 +70,12 @@ def _build_embedding(wines: pd.DataFrame) -> tuple[np.ndarray, pd.DataFrame, lis
 
 
 def _load_food_list() -> pd.DataFrame:
-    path = REF_DATA_DIR / "list_of_foods.csv"
+    path = DATA_DIR / "list_of_foods.csv"
     return pd.read_csv(path)
 
 
 def _load_descriptor_tastes() -> pd.DataFrame:
-    path = REF_DATA_DIR / "descriptor_mapping_tastes.csv"
+    path = DATA_DIR / "descriptor_mapping_tastes.csv"
     return pd.read_csv(path)
 
 
@@ -274,7 +270,6 @@ def cmd_pair_wine_to(args: argparse.Namespace) -> None:
 
 def main() -> None:
     logger.info("Data directory: %s", DATA_DIR)
-    logger.info("Reference data directory: %s", REF_DATA_DIR)
 
     parser = argparse.ArgumentParser(
         prog="wine-buddy",

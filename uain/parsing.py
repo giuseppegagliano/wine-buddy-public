@@ -9,11 +9,9 @@ from typing import Any
 
 import pandas as pd
 
-from uain.config import COUNTRY_CODE, ROOT_PATH
+from uain.config import COUNTRY_CODE, DATA_DIR
 
 logger = logging.getLogger(__name__)
-
-DATA_DIR = Path(ROOT_PATH) / "data"
 
 # Precompiled regex for speed and clarity.
 _INTERNAL_APOSTROPHE_RE = re.compile(r"(?<=[A-Za-z])'(?=[A-Za-z])")
