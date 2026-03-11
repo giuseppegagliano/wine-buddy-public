@@ -18,6 +18,10 @@ from uain.config import COUNTRY_CODE, FOOD_WEIGHTS, ROOT_PATH, WINE_WEIGHTS
 from uain.parsing import get_flavour
 from uain.rules import nonaroma_rules
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s - %(message)s",
+)
 logger = logging.getLogger(__name__)
 
 DATA_DIR = ROOT_PATH / "data"
@@ -148,6 +152,7 @@ def cmd_find_wine_like(args: argparse.Namespace) -> None:
     result = wines.iloc[ind[0]].copy()
     result["distance"] = dist[0]
     result = result[result.index != query_idx].head(k)
+    result["url"] = result["wine_seo_name"].apply(lambda name: f"https://www.vivino.com/w/{name}")
 
     display_cols = [
         "wine_seo_name",
@@ -157,6 +162,7 @@ def cmd_find_wine_like(args: argparse.Namespace) -> None:
         "region_seo_name",
         "ratings_average",
         "distance",
+        "url",
     ]
     cols = [c for c in display_cols if c in result.columns]
     print(result[cols].to_string(index=False))
@@ -266,8 +272,6 @@ def cmd_pair_wine_to(args: argparse.Namespace) -> None:
 def main() -> None:
     logger.info("Data directory: %s", DATA_DIR)
     logger.info("Reference data directory: %s", REF_DATA_DIR)
-    print("Data directory:", DATA_DIR)
-    print("Reference data directory:", REF_DATA_DIR)
 
     parser = argparse.ArgumentParser(
         prog="wine-buddy",
