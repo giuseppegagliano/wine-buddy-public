@@ -1,7 +1,51 @@
+import io
+import logging
 import os
+import zipfile
 from pathlib import Path
+from urllib.request import urlopen
 
 ROOT_PATH = Path(os.environ.get("WINE_BUDDY_ROOT", Path(__file__).resolve().parent.parent))
+DATA_DIR = ROOT_PATH / "data"
+
+logger = logging.getLogger(__name__)
+
+
+def _load_dotenv() -> None:
+    """Load .env file from project root if it exists (no extra dependency)."""
+    env_file = ROOT_PATH / ".env"
+    if not env_file.is_file():
+        return
+    for line in env_file.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        os.environ.setdefault(key.strip(), value.strip())
+
+
+_load_dotenv()
+
+
+def _ensure_data() -> None:
+    """Download and extract data zip from DATA_ZIP_URL if data dir is missing."""
+    if DATA_DIR.exists() and any(DATA_DIR.glob("*.csv")):
+        return
+    url = os.environ.get("GDRIVE_DATA_LINK")
+    if not url:
+        return
+    # Convert Google Drive share link to direct download
+    if "drive.google.com" in url:
+        file_id = url.split("/d/")[1].split("/")[0]
+        url = f"https://drive.google.com/uc?export=download&id={file_id}"
+    logger.info("Downloading data from GDRIVE_DATA_LINK...")
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    with urlopen(url) as resp:
+        zipfile.ZipFile(io.BytesIO(resp.read())).extractall(DATA_DIR)
+    logger.info("Data extracted to %s", DATA_DIR)
+
+
+_ensure_data()
 
 # // ------------------------ GENERAL PARAMS ------------------------------
 column_names = [
