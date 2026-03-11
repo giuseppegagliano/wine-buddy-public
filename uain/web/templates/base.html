@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Wine Buddy{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="/" class="nav-brand">
+        <span class="nav-icon">&#127863;</span> Wine Buddy
+      </a>
+      <button class="nav-toggle" aria-label="Menu" onclick="document.querySelector('.nav-links').classList.toggle('open')">
+        <span></span><span></span><span></span>
+      </button>
+      <div class="nav-links">
+        <a href="/find-similar" class="{% if request.path == '/find-similar' or request.path == '/' %}active{% endif %}">Find Similar</a>
+        <a href="#" class="disabled" title="Coming soon">Pair to Food</a>
+        <a href="#" class="disabled" title="Coming soon">Explore</a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="footer">
+    <p>Wine Buddy &mdash; open-source wine analysis</p>
+  </footer>
+</body>
+</html>
