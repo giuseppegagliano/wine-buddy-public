@@ -29,7 +29,7 @@ _load_dotenv()
 
 def _ensure_data() -> None:
     """Download and extract data zip from DATA_ZIP_URL if data dir is missing."""
-    if DATA_DIR.exists() and any(DATA_DIR.glob("*.csv")):
+    if DATA_DIR.exists() and (any(DATA_DIR.glob("*.parquet")) or any(DATA_DIR.glob("*.csv"))):
         return
     url = os.environ.get("GDRIVE_DATA_LINK")
     if not url:
