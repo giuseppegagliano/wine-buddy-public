@@ -237,12 +237,17 @@ def get_flavors(color: str = "red") -> pd.DataFrame:
     )
 
 
-def get_grapes(color: str = "red") -> pd.DataFrame:
+def get_grapes(color_or_df: str | pd.DataFrame = "red") -> pd.DataFrame:
     """
-    Load grape indicators for the requested color and return a one-hot encoded table:
-    one row per id, one column per grape.
+    Return a one-hot encoded grape table (one row per id, one column per grape).
+
+    Accepts either a color string (loads from parquet) or a DataFrame with
+    'id' and 'style_grapes' columns.
     """
-    df = _load_color_df(color)
+    if isinstance(color_or_df, pd.DataFrame):
+        df = color_or_df
+    else:
+        df = _load_color_df(color_or_df)
     _validate_columns(df, {"id", "style_grapes"}, context="get_grapes")
 
     flattened = _explode_records(

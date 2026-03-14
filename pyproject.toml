@@ -54,4 +54,5 @@ dev = [
     "seaborn",
     "matplotlib",
     "jupyterlab",
+    "umap-learn",
 ]

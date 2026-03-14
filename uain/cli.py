@@ -6,9 +6,6 @@ import logging
 
 import numpy as np
 import pandas as pd
-from sklearn.decomposition import PCA
-from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import StandardScaler
 
 from uain.config import DATA_DIR, FOOD_WEIGHTS, WINE_WEIGHTS
 from uain.scraper.parsing import get_flavour, load_wines
@@ -45,26 +42,17 @@ def _load_wines() -> pd.DataFrame:
 
 
 def _build_embedding(wines: pd.DataFrame) -> tuple[np.ndarray, pd.DataFrame, list[str]]:
-    """One-hot encode categoricals, PCA-embed, return (x_embedded, df, features)."""
-    df = wines.copy()
-    for col in ("winery_seo_name", "region_seo_name"):
-        if col in df.columns:
-            ohe = pd.get_dummies(df[col], prefix=col)
-            df = df.drop(columns=col).join(ohe)
+    """Build feature matrix and embed wines, return (x_embedded, df, features).
 
-    exclude = {
-        "id", "wine_id", "wine_seo_name", "country_code", "wine_type",
-        "vintage_name", "vintage_seo_name", "wine_name", "winery_name",
-        "region_name", "region_name_en", "country_name",
-        "style_name", "style_seo_name", "style_body_description",
-        "style_acidity_description", "price_currency",
-    }
-    features = [c for c in df.columns if c not in exclude and df[c].dtype != "object"]
-    df[features] = df[features].apply(pd.to_numeric, errors="coerce").fillna(0)
+    Uses the same pipeline as scripts/precompute.py:
+    structure + flavor scores + grape indicators → StandardScaler → PCA.
+    """
+    from scripts.precompute import _build_feature_matrix, _compute_embeddings
 
-    pca = make_pipeline(StandardScaler(), PCA(n_components=2, random_state=0))
-    x_embedded = pca.fit_transform(df[features])
-    return x_embedded, df, features
+    feature_df = _build_feature_matrix(wines)
+    feature_cols = [c for c in feature_df.columns if c != "id"]
+    search_emb, _viz_emb, _explained = _compute_embeddings(feature_df)
+    return search_emb, feature_df, feature_cols
 
 
 def _load_food_list() -> pd.DataFrame:

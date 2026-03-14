@@ -31,7 +31,12 @@ def get_wine_index() -> WineIndex:
     logger.info("Loading precomputed wine index from %s", path)
     t0 = time.perf_counter()
     wines = pd.read_parquet(path)
-    embeddings = wines[["pca_0", "pca_1"]].to_numpy()
+    # Use higher-dim search embeddings if available, fall back to 2D viz embeddings
+    emb_cols = sorted([c for c in wines.columns if c.startswith("emb_")])
+    if emb_cols:
+        embeddings = wines[emb_cols].to_numpy()
+    else:
+        embeddings = wines[["pca_0", "pca_1"]].to_numpy()
     logger.info("Wine index loaded: %d wines in %.2fs", len(wines), time.perf_counter() - t0)
     return WineIndex(wines=wines, embeddings=embeddings)
 
