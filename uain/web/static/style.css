@@ -678,5 +678,94 @@ a.card:has(.badge.pink) { border-left-color: var(--pink); }
   color: var(--muted);
 }
 
+/* ---------- Grouped wine cards ---------- */
+.group-card {
+  border-left: 3px solid var(--border);
+}
+.group-card:has(.badge.red) { border-left-color: var(--red); }
+.group-card:has(.badge.white) { border-left-color: var(--white-w); }
+.group-card:has(.badge.sparkling) { border-left-color: var(--spark); }
+.group-card:has(.badge.pink) { border-left-color: var(--pink); }
+
+.expand-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: .2rem .5rem;
+  font-size: .75rem;
+  font-weight: 600;
+  font-family: var(--font);
+  color: var(--muted);
+  cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.expand-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.expand-icon {
+  font-size: .9rem;
+  line-height: 1;
+  transition: transform .2s;
+}
+.group-card.expanded .expand-icon {
+  transform: rotate(45deg);
+}
+.expand-count {
+  font-variant-numeric: tabular-nums;
+}
+
+.group-wine {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+  padding: .45rem .65rem;
+  border-radius: 6px;
+  text-decoration: none;
+  color: var(--text);
+  font-size: .85rem;
+  transition: background .1s;
+}
+.group-wine:hover {
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+}
+.group-wine-best {
+  margin-top: .65rem;
+  padding-top: .55rem;
+  border-top: 1px solid var(--border);
+}
+.group-wine-winery {
+  font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.group-wine-right {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  flex-shrink: 0;
+}
+.group-wine-year {
+  font-size: .75rem;
+  color: var(--muted);
+}
+
+/* Hidden by default, shown when expanded */
+.group-wines-list {
+  display: none;
+  flex-direction: column;
+  gap: .1rem;
+  margin-top: .25rem;
+}
+.group-card.expanded .group-wines-list {
+  display: flex;
+}
+
 /* ---------- Loading state ---------- */
 .search-form.loading button { opacity: .6; pointer-events: none; }

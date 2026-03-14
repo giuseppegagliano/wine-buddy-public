@@ -141,7 +141,7 @@
 </section>
 {% endif %}
 
-{# Step 2: Show similar wines by flavour profile #}
+{# Step 2: Show similar wines grouped by kind #}
 {% if results %}
 <section class="results">
   <div class="results-header">
@@ -154,22 +154,47 @@
   </div>
 
   <div class="card-grid">
-    {% for wine in results.matches %}
-    <a href="{{ wine.url }}" target="_blank" rel="noopener" class="card">
+    {% for group in results.groups %}
+    <div class="card group-card">
       <div class="card-top">
-        <span class="badge small {{ wine.wine_type }}">{{ wine.wine_type }}</span>
+        <span class="badge small {{ group.wine_type }}">{{ group.wine_type }}</span>
+        {% if group.wines | length > 1 %}
+        <button class="expand-btn" aria-expanded="false" aria-label="Show all producers" onclick="this.closest('.group-card').classList.toggle('expanded'); this.setAttribute('aria-expanded', this.closest('.group-card').classList.contains('expanded'))">
+          <span class="expand-icon">+</span>
+          <span class="expand-count">{{ group.wines | length }}</span>
+        </button>
+        {% endif %}
       </div>
-      <h3 class="card-name">{{ wine.name | replace("-", " ") | title }}</h3>
-      <p class="card-winery">{{ wine.winery | replace("-", " ") | title }}</p>
+      <h3 class="card-name">{{ group.name | replace("-", " ") | title }}</h3>
       <div class="card-meta">
-        <span>{{ wine.region | replace("-", " ") | title if wine.region else "—" }}</span>
-        <span>{{ wine.year if wine.year else "N.V." }}</span>
+        <span>{{ group.region | replace("-", " ") | title if group.region else "—" }}</span>
+        <span class="card-score" title="Embedding distance">{{ "%.3f" | format(group.distance) }}</span>
       </div>
-      <div class="card-bottom">
-        <span class="card-rating"><span class="star">&#9733;</span> {{ wine.rating }}</span>
-        <span class="card-score" title="Embedding distance">{{ "%.3f" | format(wine.distance) }}</span>
+
+      {# Best-rated wine shown by default #}
+      <a href="{{ group.wines[0].url }}" target="_blank" rel="noopener" class="group-wine group-wine-best">
+        <span class="group-wine-winery">{{ group.wines[0].winery | replace("-", " ") | title }}</span>
+        <span class="group-wine-right">
+          <span class="card-rating"><span class="star">&#9733;</span> {{ group.wines[0].rating }}</span>
+          {% if group.wines[0].year %}<span class="group-wine-year">{{ group.wines[0].year }}</span>{% endif %}
+        </span>
+      </a>
+
+      {# Expandable list of all other producers #}
+      {% if group.wines | length > 1 %}
+      <div class="group-wines-list">
+        {% for wine in group.wines[1:] %}
+        <a href="{{ wine.url }}" target="_blank" rel="noopener" class="group-wine">
+          <span class="group-wine-winery">{{ wine.winery | replace("-", " ") | title }}</span>
+          <span class="group-wine-right">
+            <span class="card-rating"><span class="star">&#9733;</span> {{ wine.rating }}</span>
+            {% if wine.year %}<span class="group-wine-year">{{ wine.year }}</span>{% endif %}
+          </span>
+        </a>
+        {% endfor %}
       </div>
-    </a>
+      {% endif %}
+    </div>
     {% endfor %}
   </div>
 </section>

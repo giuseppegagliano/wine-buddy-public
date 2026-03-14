@@ -121,23 +121,29 @@ def search_wines_by_name(query: str, limit: int = 20) -> list[dict]:
 
 
 def find_similar_wines(wine_idx: int, k: int = 5) -> dict:
-    """Find wines with similar flavour profiles to the wine at *wine_idx*."""
+    """Find wines with similar flavour profiles to the wine at *wine_idx*.
+
+    Results are grouped by wine_seo_name (denomination/kind). Each group shows
+    a representative wine (best rated) and can be expanded to see all producers.
+    """
     t0 = time.perf_counter()
     idx = get_wine_index()
     logger.debug("find_similar_wines(%d): index ready in %.3fs", wine_idx, time.perf_counter() - t0)
 
     if wine_idx < 0 or wine_idx >= len(idx.wines):
         logger.warning("find_similar_wines(%d): index out of range (dataset has %d wines)", wine_idx, len(idx.wines))
-        return {"query_wine": None, "matches": []}
+        return {"query_wine": None, "groups": []}
 
     query_point = idx.embeddings[wine_idx]
     query_wine = idx.wines.iloc[wine_idx]
 
-    # Fast vectorized distance computation on precomputed embeddings
+    # Fetch more results than requested so grouping still yields enough groups
+    fetch_k = k * 10
     dists = np.linalg.norm(idx.embeddings - query_point, axis=1)
     dists[wine_idx] = np.inf
-    top_indices = np.argsort(dists)[:k]
+    top_indices = np.argsort(dists)[:fetch_k]
 
+    # Build flat match list
     matches = []
     for i in top_indices:
         row = idx.wines.iloc[i]
@@ -156,9 +162,32 @@ def find_similar_wines(wine_idx: int, k: int = 5) -> dict:
             }
         )
 
+    # Group by wine_seo_name (denomination), keep first distance as group distance
+    groups: dict[str, dict] = {}
+    for m in matches:
+        key = m["name"]
+        if key not in groups:
+            groups[key] = {
+                "name": m["name"],
+                "wine_type": m["wine_type"],
+                "region": m["region"],
+                "distance": m["distance"],
+                "wines": [],
+            }
+        groups[key]["wines"].append(m)
+
+    # Sort groups by distance (closest first), limit to k groups
+    sorted_groups = sorted(groups.values(), key=lambda g: g["distance"])[:k]
+
+    # Within each group, sort wines by rating (best first)
+    for g in sorted_groups:
+        g["wines"].sort(key=lambda w: w["rating"], reverse=True)
+        g["best_rating"] = g["wines"][0]["rating"] if g["wines"] else 0
+
     logger.info(
-        "find_similar_wines(%d): found %d matches in %.3fs",
-        wine_idx, len(matches), time.perf_counter() - t0,
+        "find_similar_wines(%d): found %d groups (%d total wines) in %.3fs",
+        wine_idx, len(sorted_groups), sum(len(g["wines"]) for g in sorted_groups),
+        time.perf_counter() - t0,
     )
     return {
         "query_wine": {
@@ -166,7 +195,7 @@ def find_similar_wines(wine_idx: int, k: int = 5) -> dict:
             "winery": query_wine.get("winery_seo_name", ""),
             "wine_type": query_wine.get("wine_type", ""),
         },
-        "matches": matches,
+        "groups": sorted_groups,
     }
 
 
