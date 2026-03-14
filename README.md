@@ -59,6 +59,10 @@ uv run pre-commit install
 
 Pre-commit runs ruff lint + format, trailing whitespace, end-of-file, and large file checks on every commit.
 
+## Privacy
+
+For details on data collection and privacy practices, see [PRIVACY.md](PRIVACY.md).
+
 ## Credits
 
 - Food pairing logic inspired by [RoaldSchuring/wine_food_pairing](https://github.com/RoaldSchuring/wine_food_pairing)
