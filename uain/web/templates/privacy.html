@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}Privacy Policy - Wine Buddy{% endblock %}
+
+{% block content %}
+<div class="privacy-content">
+  <h1>Privacy Policy</h1>
+
+  <p><strong>Last Updated:</strong> March 2026</p>
+
+  <h2>Overview</h2>
+  <p>Wine Buddy is a web application that respects user privacy. We collect minimal data and do not collect personally identifiable information (PII).</p>
+
+  <h2>Data Collection</h2>
+
+  <h3>What We Collect</h3>
+  <p>We use <strong>Sentry</strong> for application performance monitoring. This includes:</p>
+  <ul>
+    <li>Response times for each endpoint</li>
+    <li>Error logs and stack traces</li>
+    <li>Basic device information (OS and browser type)</li>
+    <li>Request paths and HTTP status codes</li>
+  </ul>
+
+  <h3>What We Do NOT Collect</h3>
+  <ul>
+    <li><strong>IP addresses</strong> — Disabled for GDPR compliance</li>
+    <li><strong>User identifiers</strong> — No user accounts or tracking cookies</li>
+    <li><strong>Request bodies</strong> — Automatically filtered to prevent data leakage</li>
+    <li><strong>Cookies</strong> — Not tracked or logged</li>
+    <li><strong>Personal information</strong> — No name, email, or individual identifiers</li>
+  </ul>
+
+  <h2>Why We Collect This Data</h2>
+  <p>Performance monitoring data helps us:</p>
+  <ul>
+    <li>Identify and fix errors affecting the application</li>
+    <li>Monitor endpoint response times</li>
+    <li>Ensure reliable service across different devices and browsers</li>
+    <li>Improve overall application stability and performance</li>
+  </ul>
+
+  <h2>Data Security & Retention</h2>
+  <ul>
+    <li>All data is transmitted over HTTPS (encrypted)</li>
+    <li>Sentry compliance: <a href="https://sentry.io/privacy/" target="_blank">Sentry's Data Processing Agreement</a></li>
+    <li>Data retention: Determined by your Sentry project settings (typically 90 days)</li>
+  </ul>
+
+  <h2>Your Rights</h2>
+  <p>Since we do not collect personally identifiable information, GDPR requires no consent banner or data subject rights requests. However, if you have questions about our data practices, please reach out.</p>
+
+  <h2>Contact</h2>
+  <p>For privacy concerns, contact the project maintainer via <a href="https://github.com/giuseppegagliano/wine-buddy-public/issues" target="_blank">GitHub Issues</a>.</p>
+</div>
+{% endblock %}
