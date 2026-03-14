@@ -13,9 +13,9 @@ from sklearn.neighbors import KDTree
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
-from uain.config import COUNTRY_CODE, DATA_DIR, FOOD_WEIGHTS, WINE_WEIGHTS
-from uain.parsing import get_flavour
-from uain.rules import nonaroma_rules
+from uain.config import DATA_DIR, FOOD_WEIGHTS, WINE_WEIGHTS
+from uain.scraper.parsing import get_flavour, load_wines
+from uain.pairing.rules import nonaroma_rules
 
 logging.basicConfig(
     level=logging.INFO,
@@ -30,19 +30,15 @@ logger = logging.getLogger(__name__)
 
 
 def _load_wines() -> pd.DataFrame:
-    """Load and merge scraped wine CSVs from data/."""
-    frames = []
-    for color in ("red", "white", "sparkling"):
-        path = DATA_DIR / f"{COUNTRY_CODE.lower()}_{color}.csv"
-        if path.exists():
-            frames.append(pd.read_csv(path))
-    if not frames:
+    """Load wines from the unified Parquet file."""
+    try:
+        wines = load_wines()
+    except FileNotFoundError:
         print(
-            f"No wine data found in {DATA_DIR}/. Run the scraper first (see the notebook).",
+            f"No wine data found in {DATA_DIR}/. Run the scraper first.",
             file=sys.stderr,
         )
         sys.exit(1)
-    wines = pd.concat(frames).reset_index(drop=True)
     flavours = get_flavour(wines)
     wines = wines.merge(flavours, on="id")
     wines = wines.drop(
@@ -56,12 +52,17 @@ def _build_embedding(wines: pd.DataFrame) -> tuple[np.ndarray, pd.DataFrame, lis
     df = wines.copy()
     for col in ("winery_seo_name", "region_seo_name"):
         if col in df.columns:
-            ohe = pd.get_dummies(df[col])
+            ohe = pd.get_dummies(df[col], prefix=col)
             df = df.drop(columns=col).join(ohe)
 
-    id_cols = {"id", "wine_id", "wine_seo_name", "region_country_code", "wine_type"}
-    features = [c for c in df.columns if c not in id_cols]
-    # coerce non-numeric values (e.g. 'N.V.' in year) and fill NaNs
+    exclude = {
+        "id", "wine_id", "wine_seo_name", "country_code", "wine_type",
+        "vintage_name", "vintage_seo_name", "wine_name", "winery_name",
+        "region_name", "region_name_en", "country_name",
+        "style_name", "style_seo_name", "style_body_description",
+        "style_acidity_description", "price_currency",
+    }
+    features = [c for c in df.columns if c not in exclude and df[c].dtype != "object"]
     df[features] = df[features].apply(pd.to_numeric, errors="coerce").fillna(0)
 
     pca = make_pipeline(StandardScaler(), PCA(n_components=2, random_state=0))
@@ -70,12 +71,12 @@ def _build_embedding(wines: pd.DataFrame) -> tuple[np.ndarray, pd.DataFrame, lis
 
 
 def _load_food_list() -> pd.DataFrame:
-    path = DATA_DIR / "list_of_foods.csv"
+    path = DATA_DIR / "csv" / "list_of_foods.csv"
     return pd.read_csv(path)
 
 
 def _load_descriptor_tastes() -> pd.DataFrame:
-    path = DATA_DIR / "descriptor_mapping_tastes.csv"
+    path = DATA_DIR / "csv" / "descriptor_mapping_tastes.csv"
     return pd.read_csv(path)
 
 
@@ -148,9 +149,8 @@ def cmd_find_wine_like(args: argparse.Namespace) -> None:
     result = wines.iloc[ind[0]].copy()
     result["distance"] = dist[0]
     result = result[result.index != query_idx].head(k)
-    result["url"] = result.apply(
-        lambda r: "https://www.google.com/search?q=" + "+".join(f"{r['wine_seo_name']} {r['winery_seo_name']}".split()),
-        axis=1,
+    result["url"] = result["wine_id"].apply(
+        lambda wid: f"https://www.vivino.com/w/{int(wid)}"
     )
 
     display_cols = [
@@ -235,8 +235,10 @@ def cmd_pair_wine_to(args: argparse.Namespace) -> None:
     for taste, source in col_map.items():
         if source in wine_df.columns:
             raw = wine_df[source].fillna(0).astype(float)
+            # normalize 1-5 scale to 0-1 for WINE_WEIGHTS lookup
+            normalized = ((raw - 1) / 4).clip(0, 1)
             wmap = WINE_WEIGHTS.get(taste, WINE_WEIGHTS["weight"])
-            wine_df[taste] = raw.apply(lambda v, wm=wmap: _score_to_level(v, wm))
+            wine_df[taste] = normalized.apply(lambda v, wm=wmap: _score_to_level(v, wm))
         else:
             wine_df[taste] = 2
 

@@ -1,0 +1,386 @@
+{% extends "base.html" %}
+{% block title %}Pair to Food — Wine Buddy{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <h1>Pair Wine to Food <button class="info-btn" onclick="document.getElementById('infoModal').classList.add('open')" aria-label="How it works">?</button></h1>
+  <p class="subtitle">Search for a food and discover which wines pair best with it.</p>
+</section>
+
+{# Info modal #}
+<div class="modal-backdrop" id="infoModal" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>How Wine-Food Pairing Works</h2>
+      <button class="modal-close" onclick="document.getElementById('infoModal').classList.remove('open')" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <h3>The Radar Chart</h3>
+      <p>
+        Each axis represents a taste dimension scored from 1 (low) to 4 (very high).
+        The <strong>food profile</strong> is always shown; click a wine to overlay its profile and visually compare where they align or differ.
+      </p>
+
+      <h3>Taste Dimensions</h3>
+      <dl class="info-dl">
+        <dt>Sweetness</dt><dd>Perceived sugar level &mdash; mapped from the wine's residual sweetness.</dd>
+        <dt>Acidity</dt><dd>Tartness or sourness &mdash; key for balancing rich or fatty dishes.</dd>
+        <dt>Saltiness</dt><dd>Mineral or saline character &mdash; derived from the wine's intensity.</dd>
+        <dt>Spiciness</dt><dd>Piquant or peppery heat &mdash; approximated by the wine's fizziness.</dd>
+        <dt>Fattiness</dt><dd>Richness and mouthfeel &mdash; linked to the wine's body.</dd>
+        <dt>Bitterness</dt><dd>Astringent or tannic bite &mdash; mapped from tannin levels.</dd>
+      </dl>
+
+      <h3>Pairing Rules</h3>
+      <p>Wines are filtered through a series of sommelier-inspired rules:</p>
+      <ul>
+        <li><strong>Weight matching</strong> &mdash; the wine's body should match the food's weight, so a heavy dish gets a full-bodied wine.</li>
+        <li><strong>Acidity &ge; food</strong> &mdash; the wine should be at least as acidic as the food, otherwise it tastes flat.</li>
+        <li><strong>Sweetness &ge; food</strong> &mdash; the wine should be at least as sweet as the food to avoid tasting sour.</li>
+        <li><strong>Bitter avoidance</strong> &mdash; very bitter foods clash with bitter (tannic) wines.</li>
+        <li><strong>Tannin + fat</strong> &mdash; high-fat foods love tannic wines &mdash; the fat softens the tannins.</li>
+        <li><strong>Tannin vs. spice/salt</strong> &mdash; tannins amplify heat and salt, so spicy or salty dishes get low-tannin wines.</li>
+        <li><strong>Acid vs. bitter/spice</strong> &mdash; high acidity and bitterness or spiciness don't mix well.</li>
+      </ul>
+      <p>
+        Rules are applied progressively: if a rule would eliminate too many candidates, it is relaxed to keep at least a minimum number of wines.
+      </p>
+
+      <h3>Congruent vs. Contrasting</h3>
+      <p>
+        A <strong>congruent</strong> pairing shares dominant tastes (e.g. sweet wine with sweet food).
+        A <strong>contrasting</strong> pairing balances opposites (e.g. acidic wine with fatty food).
+        Both can be excellent &mdash; the chart helps you see which style each wine offers.
+      </p>
+    </div>
+  </div>
+</div>
+
+{# Searchable dropdown form #}
+<form method="POST" action="/pair-to-food" class="search-form" id="pairForm">
+  <div class="search-row">
+    <div class="autocomplete-wrap">
+      <input
+        type="text"
+        id="foodSearch"
+        name="query"
+        value="{{ query or '' }}"
+        placeholder="e.g. steak, salmon, pasta, chocolate…"
+        autocomplete="off"
+        required
+      >
+      <div class="autocomplete-list" id="foodDropdown"></div>
+    </div>
+    <div class="select-wrap">
+      <select name="k">
+        {% for n in [10, 25, 50, 100] %}
+        <option value="{{ n }}" {% if k == n %}selected{% endif %}>{{ n }} results</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit">Pair</button>
+  </div>
+</form>
+
+{% if error %}
+<div class="alert">{{ error }}</div>
+{% endif %}
+
+{# Autocomplete script (always present) #}
+<script>
+(function() {
+  const allFoods = {{ all_foods | tojson }};
+  const input = document.getElementById('foodSearch');
+  const dropdown = document.getElementById('foodDropdown');
+  const form = document.getElementById('pairForm');
+  let activeIdx = -1;
+
+  function render(matches) {
+    dropdown.innerHTML = '';
+    activeIdx = -1;
+    if (!matches.length) { dropdown.classList.remove('open'); return; }
+    matches.forEach((food, i) => {
+      const div = document.createElement('div');
+      div.className = 'autocomplete-item';
+      div.textContent = food;
+      div.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        input.value = food;
+        dropdown.classList.remove('open');
+        form.submit();
+      });
+      dropdown.appendChild(div);
+    });
+    dropdown.classList.add('open');
+  }
+
+  function filter() {
+    const q = input.value.trim().toLowerCase();
+    const matches = q.length < 1
+      ? allFoods.slice(0, 20)
+      : allFoods.filter(f => f.toLowerCase().includes(q)).slice(0, 15);
+    render(matches);
+  }
+
+  input.addEventListener('input', filter);
+
+  input.addEventListener('keydown', (e) => {
+    const items = dropdown.querySelectorAll('.autocomplete-item');
+    if (!items.length) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      activeIdx = Math.min(activeIdx + 1, items.length - 1);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      activeIdx = Math.max(activeIdx - 1, 0);
+    } else if (e.key === 'Enter' && activeIdx >= 0) {
+      e.preventDefault();
+      input.value = items[activeIdx].textContent;
+      dropdown.classList.remove('open');
+      form.submit();
+      return;
+    } else { return; }
+    items.forEach((it, i) => it.classList.toggle('active', i === activeIdx));
+    items[activeIdx].scrollIntoView({ block: 'nearest' });
+  });
+
+  input.addEventListener('blur', () => {
+    setTimeout(() => dropdown.classList.remove('open'), 150);
+  });
+  input.addEventListener('focus', filter);
+})();
+</script>
+
+{# Results: Radar charts + wine list #}
+{% if results %}
+<section class="results">
+  <div class="results-header">
+    <h2>
+      Wines that pair with
+      <span class="highlight">{{ results.food_name | title }}</span>
+    </h2>
+    <span class="meta">{{ results.wines | length }} matches</span>
+  </div>
+
+  <div class="radar-layout">
+    {# Left: both radars stacked #}
+    <div class="radar-column">
+      <div class="radar-container">
+        <h3 class="radar-title">Food &amp; Wine Pairing</h3>
+        <canvas id="radarChart"></canvas>
+        <p class="radar-hint" id="radarHint">Hover to preview — click to select multiple</p>
+      </div>
+
+      <div class="radar-container radar-wine-structure" id="wineRadarWrap">
+        <h3 class="radar-title">Wine Structure</h3>
+        <canvas id="wineRadarChart"></canvas>
+        <p class="radar-hint" id="wineRadarHint">Hover a wine to see its profile</p>
+      </div>
+    </div>
+
+    {# Right: wine list #}
+    <div class="wine-list">
+      {% for wine in results.wines %}
+      <div class="wine-row" data-wine-idx="{{ loop.index0 }}">
+        <span class="badge small {{ wine.wine_type }}">{{ wine.wine_type }}</span>
+        <div class="wine-row-info">
+          <span class="wine-row-name">{{ wine.name | replace("-", " ") | title }}</span>
+          <span class="wine-row-winery">{{ wine.winery | replace("-", " ") | title }}</span>
+        </div>
+        <div class="wine-row-meta">
+          <span class="wine-row-region">{{ wine.region | replace("-", " ") | title if wine.region else "" }}</span>
+          <span class="wine-row-rating"><span class="star">&#9733;</span> {{ wine.rating }}</span>
+          <span class="wine-row-match" title="Pairing match score&#10;&#10;60% Proximity: how close wine and food taste levels are across sweetness, acidity, saltiness, spiciness, fattiness, and bitterness.&#10;&#10;40% Rule harmony: sommelier rules — wine acidity &amp; sweetness should meet or exceed the food's; tannin pairs well with fat but clashes with spice, salt, and bitterness.">{{ wine.match }}%</span>
+        </div>
+        <a href="{{ wine.url }}" target="_blank" rel="noopener" class="wine-link-btn" title="View on Vivino" onclick="event.stopPropagation()">&#8599;</a>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+  const labels = {{ results.taste_keys | tojson }};
+  const labelNames = {{ results.taste_labels | tojson }};
+  const foodProfile = {{ results.food_profile | tojson }};
+  const wines = {{ results.wines | tojson }};
+  const structKeys = {{ results.structure_keys | tojson }};
+  const structLabels = {{ results.structure_labels | tojson }};
+
+  const foodData = labels.map(k => foodProfile[k]);
+  const isDark = () => document.documentElement.getAttribute('data-theme') === 'dark';
+
+  function radarScaleOpts(max, step) {
+    return {
+      min: 0, max: max,
+      ticks: {
+        stepSize: step, display: true,
+        backdropColor: 'transparent',
+        font: { size: 10 },
+        color: () => isDark() ? '#b5b2b9' : '#78756e',
+      },
+      grid: { color: () => isDark() ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' },
+      angleLines: { color: () => isDark() ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' },
+      pointLabels: {
+        font: { size: 13, weight: '600' },
+        color: () => isDark() ? '#eeecf0' : '#1a1a1a',
+      }
+    };
+  }
+  function legendOpts() {
+    return {
+      position: 'bottom',
+      labels: {
+        usePointStyle: true, pointStyle: 'circle',
+        padding: 16, font: { size: 12 },
+        color: () => isDark() ? '#eeecf0' : '#1a1a1a',
+      }
+    };
+  }
+
+  // --- Pairing radar ---
+  const pairingChart = new Chart(document.getElementById('radarChart').getContext('2d'), {
+    type: 'radar',
+    data: {
+      labels: labels.map(k => labelNames[k]),
+      datasets: [{
+        label: '{{ results.food_name | title }}',
+        data: foodData,
+        backgroundColor: 'rgba(124, 58, 46, 0.15)',
+        borderColor: 'rgba(124, 58, 46, 0.8)',
+        borderWidth: 2,
+        pointBackgroundColor: 'rgba(124, 58, 46, 0.9)',
+        pointRadius: 4, pointHoverRadius: 6, order: 1,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      scales: { r: radarScaleOpts(4, 1) },
+      plugins: { legend: legendOpts(), tooltip: { enabled: true } },
+      animation: { duration: 300 }
+    }
+  });
+
+  // --- Wine structure radar ---
+  const structChart = new Chart(document.getElementById('wineRadarChart').getContext('2d'), {
+    type: 'radar',
+    data: {
+      labels: structKeys.map(k => structLabels[k]),
+      datasets: []
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      scales: { r: radarScaleOpts(5, 1) },
+      plugins: { legend: legendOpts(), tooltip: { enabled: true } },
+      animation: { duration: 300 }
+    }
+  });
+
+  const wineColors = [
+    { bg: 'rgba(139, 46, 59, 0.20)', border: 'rgba(139, 46, 59, 0.85)', point: 'rgba(139, 46, 59, 1)' },
+    { bg: 'rgba(62, 122, 110, 0.20)', border: 'rgba(62, 122, 110, 0.85)', point: 'rgba(62, 122, 110, 1)' },
+    { bg: 'rgba(196, 168, 63, 0.20)', border: 'rgba(196, 168, 63, 0.85)', point: 'rgba(196, 168, 63, 1)' },
+    { bg: 'rgba(100, 80, 160, 0.20)', border: 'rgba(100, 80, 160, 0.85)', point: 'rgba(100, 80, 160, 1)' },
+    { bg: 'rgba(212, 100, 122, 0.20)', border: 'rgba(212, 100, 122, 0.85)', point: 'rgba(212, 100, 122, 1)' },
+  ];
+
+  const hint = document.getElementById('radarHint');
+  const wineHint = document.getElementById('wineRadarHint');
+  const wineRadarWrap = document.getElementById('wineRadarWrap');
+  const rows = document.querySelectorAll('.wine-row');
+  const wineListEl = document.querySelector('.wine-list');
+
+  // State: set of locked wine indices (empty = hover mode)
+  const selected = new Set();
+
+  function wineDataset(idx) {
+    const wine = wines[idx];
+    const color = wineColors[idx % wineColors.length];
+    const name = wine.name.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    return { name, color, wine };
+  }
+
+  function renderCharts(indices) {
+    // Pairing radar: food dataset is always [0]
+    pairingChart.data.datasets.length = 1;
+    structChart.data.datasets = [];
+
+    indices.forEach(idx => {
+      const { name, color, wine } = wineDataset(idx);
+      pairingChart.data.datasets.push({
+        label: name,
+        data: labels.map(k => wine.tastes[k]),
+        backgroundColor: color.bg, borderColor: color.border,
+        borderWidth: 2.5, pointBackgroundColor: color.point,
+        pointRadius: 5, pointHoverRadius: 7, order: 0,
+      });
+      structChart.data.datasets.push({
+        label: name,
+        data: structKeys.map(k => wine.structure[k]),
+        backgroundColor: color.bg, borderColor: color.border,
+        borderWidth: 2.5, pointBackgroundColor: color.point,
+        pointRadius: 5, pointHoverRadius: 7,
+      });
+    });
+
+    pairingChart.update();
+    structChart.update();
+
+    const hasData = indices.length > 0;
+    hint.style.opacity = hasData ? '0' : '1';
+    wineHint.style.opacity = hasData ? '0' : '1';
+    wineRadarWrap.classList.toggle('active', hasData);
+  }
+
+  function syncRowStyles(activeIndices) {
+    rows.forEach((r, i) => {
+      r.classList.toggle('wine-row-active', activeIndices.has(i));
+    });
+  }
+
+  // Hover: preview on radars (only when nothing is locked)
+  rows.forEach(row => {
+    const idx = parseInt(row.dataset.wineIdx, 10);
+
+    row.addEventListener('mouseenter', () => {
+      if (selected.size > 0) return;
+      renderCharts([idx]);
+      syncRowStyles(new Set([idx]));
+    });
+
+    row.addEventListener('mouseleave', () => {
+      if (selected.size > 0) return;
+      renderCharts([]);
+      syncRowStyles(new Set());
+    });
+
+    // Click: toggle this wine in the selection
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('.wine-link-btn')) return;
+      if (selected.has(idx)) {
+        selected.delete(idx);
+      } else {
+        selected.add(idx);
+      }
+      renderCharts([...selected]);
+      syncRowStyles(selected);
+    });
+  });
+
+  // Click outside: clear all selections, back to hover mode
+  document.addEventListener('click', (e) => {
+    if (selected.size === 0) return;
+    const insideList = wineListEl.contains(e.target);
+    const insideRadar = e.target.closest('.radar-column');
+    if (!insideList && !insideRadar) {
+      selected.clear();
+      renderCharts([]);
+      syncRowStyles(selected);
+    }
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}

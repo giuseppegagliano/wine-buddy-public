@@ -4,19 +4,23 @@
 {% block content %}
 <section class="hero">
   <h1>Find Similar Wines</h1>
-  <p class="subtitle">Enter a wine name and discover similar bottles from the catalog.</p>
+  <p class="subtitle">Search for a wine by name, pick it from the results, and discover similar bottles.</p>
 </section>
 
-<form method="POST" action="/find-similar" class="search-form">
+<form method="POST" action="/find-similar" class="search-form" id="searchForm">
   <div class="search-row">
-    <input
-      type="text"
-      name="query"
-      value="{{ query or '' }}"
-      placeholder="e.g. amarone, barolo, prosecco…"
-      autocomplete="off"
-      required
-    >
+    <div class="autocomplete-wrap">
+      <input
+        type="text"
+        id="wineSearch"
+        name="query"
+        value="{{ query or '' }}"
+        placeholder="e.g. amarone, barolo, prosecco…"
+        autocomplete="off"
+        required
+      >
+      <div class="autocomplete-list" id="wineDropdown"></div>
+    </div>
     <div class="select-wrap">
       <select name="k">
         {% for n in [3, 5, 10, 15, 20] %}
@@ -28,10 +32,116 @@
   </div>
 </form>
 
+<script>
+(function() {
+  const input = document.getElementById('wineSearch');
+  const dropdown = document.getElementById('wineDropdown');
+  const form = document.getElementById('searchForm');
+  let activeIdx = -1;
+  let debounceTimer = null;
+
+  function render(wines) {
+    dropdown.innerHTML = '';
+    activeIdx = -1;
+    if (!wines.length) { dropdown.classList.remove('open'); return; }
+    wines.forEach((w) => {
+      const div = document.createElement('div');
+      div.className = 'autocomplete-item';
+      const name = (w.name || '').replace(/-/g, ' ');
+      const winery = (w.winery || '').replace(/-/g, ' ');
+      div.innerHTML = '<span class="ac-name">' + name + '</span> <span class="ac-winery">' + winery + '</span>';
+      div.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        input.value = w.name.replace(/-/g, ' ');
+        dropdown.classList.remove('open');
+        form.submit();
+      });
+      dropdown.appendChild(div);
+    });
+    dropdown.classList.add('open');
+  }
+
+  function search() {
+    const q = input.value.trim();
+    if (q.length < 2) { dropdown.classList.remove('open'); return; }
+    fetch('/api/wines/search?q=' + encodeURIComponent(q))
+      .then(r => r.json())
+      .then(render)
+      .catch(() => dropdown.classList.remove('open'));
+  }
+
+  input.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(search, 200);
+  });
+
+  input.addEventListener('keydown', (e) => {
+    const items = dropdown.querySelectorAll('.autocomplete-item');
+    if (!items.length) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      activeIdx = Math.min(activeIdx + 1, items.length - 1);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      activeIdx = Math.max(activeIdx - 1, 0);
+    } else if (e.key === 'Enter' && activeIdx >= 0) {
+      e.preventDefault();
+      items[activeIdx].dispatchEvent(new Event('mousedown'));
+      return;
+    } else { return; }
+    items.forEach((it, i) => it.classList.toggle('active', i === activeIdx));
+    items[activeIdx].scrollIntoView({ block: 'nearest' });
+  });
+
+  input.addEventListener('blur', () => {
+    setTimeout(() => dropdown.classList.remove('open'), 150);
+  });
+  input.addEventListener('focus', () => {
+    if (input.value.trim().length >= 2) search();
+  });
+})();
+</script>
+
 {% if error %}
 <div class="alert">{{ error }}</div>
 {% endif %}
 
+{# Step 1: Show candidate wines to pick from #}
+{% if candidates %}
+<section class="results">
+  <div class="results-header">
+    <h2>Select a wine</h2>
+    <span class="meta muted">{{ candidates | length }} matches for "{{ query }}"</span>
+  </div>
+
+  <div class="card-grid">
+    {% for wine in candidates %}
+    <form method="POST" action="/find-similar" class="card card-selectable">
+      <input type="hidden" name="wine_idx" value="{{ wine.idx }}">
+      <input type="hidden" name="k" value="{{ k }}">
+      <input type="hidden" name="query" value="{{ query }}">
+      <button type="submit" class="card-btn">
+        <div class="card-top">
+          <span class="badge small {{ wine.wine_type }}">{{ wine.wine_type }}</span>
+        </div>
+        <h3 class="card-name">{{ wine.name | replace("-", " ") | title }}</h3>
+        <p class="card-winery">{{ wine.winery | replace("-", " ") | title }}</p>
+        <div class="card-meta">
+          <span>{{ wine.region | replace("-", " ") | title if wine.region else "—" }}</span>
+          <span>{{ wine.year if wine.year else "N.V." }}</span>
+        </div>
+        <div class="card-bottom">
+          <span class="card-rating"><span class="star">&#9733;</span> {{ wine.rating }}</span>
+          <span class="card-score" title="Name similarity">{{ "%.0f" | format([wine.score, 1.0] | min * 100) }}%</span>
+        </div>
+      </button>
+    </form>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{# Step 2: Show similar wines by flavour profile #}
 {% if results %}
 <section class="results">
   <div class="results-header">
@@ -41,9 +151,6 @@
     </h2>
     <span class="badge {{ results.query_wine.wine_type }}">{{ results.query_wine.wine_type }}</span>
     <span class="meta">by {{ results.query_wine.winery | replace("-", " ") | title }}</span>
-    {% if results.candidates > 1 %}
-    <span class="meta muted">({{ results.candidates }} name matches — showing nearest to first)</span>
-    {% endif %}
   </div>
 
   <div class="card-grid">
@@ -51,7 +158,6 @@
     <a href="{{ wine.url }}" target="_blank" rel="noopener" class="card">
       <div class="card-top">
         <span class="badge small {{ wine.wine_type }}">{{ wine.wine_type }}</span>
-        <span class="card-distance" title="Embedding distance">{{ "%.3f" | format(wine.distance) }}</span>
       </div>
       <h3 class="card-name">{{ wine.name | replace("-", " ") | title }}</h3>
       <p class="card-winery">{{ wine.winery | replace("-", " ") | title }}</p>
@@ -59,8 +165,9 @@
         <span>{{ wine.region | replace("-", " ") | title if wine.region else "—" }}</span>
         <span>{{ wine.year if wine.year else "N.V." }}</span>
       </div>
-      <div class="card-rating">
-        <span class="star">&#9733;</span> {{ wine.rating }}
+      <div class="card-bottom">
+        <span class="card-rating"><span class="star">&#9733;</span> {{ wine.rating }}</span>
+        <span class="card-score" title="Embedding distance">{{ "%.3f" | format(wine.distance) }}</span>
       </div>
     </a>
     {% endfor %}
