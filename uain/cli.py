@@ -1,17 +1,11 @@
 """Wine Buddy CLI — find similar wines and pair wines to food."""
-
 from __future__ import annotations
 
 import argparse
 import logging
-import sys
 
 import numpy as np
 import pandas as pd
-from sklearn.decomposition import PCA
-from sklearn.neighbors import KDTree
-from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import StandardScaler
 
 from uain.config import DATA_DIR, FOOD_WEIGHTS, WINE_WEIGHTS
 from uain.scraper.parsing import get_flavour, load_wines
@@ -119,13 +113,9 @@ def cmd_find_wine_like(args: argparse.Namespace) -> None:
     query = args.query
     k = args.top
 
-    wines = _load_wines()
-    x_embedded, df, _ = _build_embedding(wines)
-    tree = KDTree(x_embedded)
-
-    # search by name
-    mask = df["wine_seo_name"].str.contains(query, case=False, na=False)
-    matches = wines.loc[mask]
+    idx = get_wine_index()
+    mask = idx.wines["wine_seo_name"].str.contains(query, case=False, na=False)
+    matches = idx.wines.loc[mask]
 
     if matches.empty:
         print(f'No wines found matching "{query}".')
@@ -138,10 +128,9 @@ def cmd_find_wine_like(args: argparse.Namespace) -> None:
         print(matches[cols].to_string(index=False))
         print()
 
-    # use the first match as the query wine
-    query_idx = matches.index[0]
-    query_point = x_embedded[query_idx].reshape(1, -1)
-    query_wine = wines.iloc[query_idx]
+    query_pos = matches.index[0]
+    query_point = idx.embeddings[query_pos]
+    query_wine = idx.wines.iloc[query_pos]
 
     print(f'Wines similar to "{query_wine["wine_seo_name"]}" ({query_wine.get("winery_seo_name", "")}):\n')
 
@@ -172,8 +161,7 @@ def cmd_pair_wine_to(args: argparse.Namespace) -> None:
     query = args.food
     k = args.top
 
-    # load food list for fuzzy matching
-    foods = _load_food_list()
+    foods = pd.read_csv(DATA_DIR / "list_of_foods.csv")
     food_col = foods.columns[0]
     foods[food_col] = foods[food_col].str.strip()
 
@@ -194,12 +182,11 @@ def cmd_pair_wine_to(args: argparse.Namespace) -> None:
     else:
         print(f'Pairing wines for: "{food_name}"\n')
 
-    # build a food taste profile from descriptor mapping
-    desc = _load_descriptor_tastes()
+    # Build food taste profile from descriptor mapping
+    desc = pd.read_csv(DATA_DIR / "descriptor_mapping_tastes.csv")
     food_lower = food_name.lower().replace(" ", "_")
     food_descriptors = desc[desc["raw descriptor"].str.contains(food_lower, case=False, na=False)]
 
-    # derive taste profile from descriptors, or use defaults
     taste_profile: dict[str, tuple[float, int]] = {}
     if not food_descriptors.empty:
         nonaroma = food_descriptors[food_descriptors["type"] == "nonaroma"]
@@ -210,7 +197,6 @@ def cmd_pair_wine_to(args: argparse.Namespace) -> None:
                 intensity = 3 if "high" in str(level_str) else 2
                 taste_profile[taste] = (0.5, intensity)
 
-    # fill missing tastes with neutral defaults
     for taste in ("weight", "sweet", "acid", "salt", "piquant", "fat", "bitter"):
         if taste not in taste_profile:
             taste_profile[taste] = (0.3, 2)
@@ -248,7 +234,6 @@ def cmd_pair_wine_to(args: argparse.Namespace) -> None:
         print("No wines matched the pairing rules. Try a different food.")
         return
 
-    # sort by rating
     if "ratings_average" in paired.columns:
         paired = paired.sort_values("ratings_average", ascending=False)
 
@@ -279,7 +264,6 @@ def main() -> None:
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
-    # find-wine-like
     p_find = sub.add_parser(
         "find-wine-like",
         help="Find wines similar to a given wine name",
@@ -288,7 +272,6 @@ def main() -> None:
     p_find.add_argument("-n", "--top", type=int, default=5, help="Number of results (default: 5)")
     p_find.set_defaults(func=cmd_find_wine_like)
 
-    # pair-wine-to
     p_pair = sub.add_parser(
         "pair-wine-to",
         help="Find wines that pair well with a given food",

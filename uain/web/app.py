@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from flask import Flask, jsonify, render_template, request
 
 from uain.web.services import (
@@ -9,6 +11,12 @@ from uain.web.services import (
     get_all_foods,
     pair_wine_to_food,
     search_wines_by_name,
+)
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s %(levelname)-8s [%(name)s] %(message)s",
+    datefmt="%H:%M:%S",
 )
 
 app = Flask(__name__)

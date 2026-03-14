@@ -1,38 +1,25 @@
-"""Shared service layer — reuses CLI data loading, caches heavy objects."""
-
+"""Web service layer — delegates to shared services."""
 from __future__ import annotations
 
 import functools
-from dataclasses import dataclass
+import logging
+import time
 from difflib import SequenceMatcher
 
 import numpy as np
 import pandas as pd
-from sklearn.neighbors import KDTree
+
+logger = logging.getLogger(__name__)
 
 from uain.cli import (
-    _build_embedding,
     _load_descriptor_tastes,
     _load_food_list,
-    _load_wines,
     _score_to_level,
 )
 from uain.config import FOOD_WEIGHTS, WINE_WEIGHTS
 from uain.pairing.rules import nonaroma_rules
-
-
-@dataclass(frozen=True)
-class WineIndex:
-    wines: pd.DataFrame
-    df: pd.DataFrame
-    x_embedded: np.ndarray
-    tree: KDTree
-
-
-@functools.lru_cache(maxsize=1)
-def _get_wines() -> pd.DataFrame:
-    """Cached wine DataFrame — full load including flavors (for find-similar)."""
-    return _load_wines()
+from uain.services import WineIndex
+from uain.services import get_wine_index  # uses precomputed parquet — fast
 
 
 @functools.lru_cache(maxsize=1)
@@ -40,19 +27,14 @@ def _get_wines_light() -> pd.DataFrame:
     """Cached wine DataFrame — skips slow flavor parsing (for food pairing)."""
     from uain.scraper.parsing import load_wines
 
+    logger.info("Loading wines (light, no flavor parsing)...")
+    t0 = time.perf_counter()
     wines = load_wines()
     wines = wines.drop(
         columns=[c for c in ("flavor", "style_food", "style_grapes") if c in wines.columns],
     )
+    logger.info("Wines light cache ready: %d wines in %.2fs", len(wines), time.perf_counter() - t0)
     return wines
-
-
-@functools.lru_cache(maxsize=1)
-def get_wine_index() -> WineIndex:
-    wines = _get_wines()
-    x_embedded, df, _ = _build_embedding(wines)
-    tree = KDTree(x_embedded)
-    return WineIndex(wines=wines, df=df, x_embedded=x_embedded, tree=tree)
 
 
 def _wine_to_url(row: pd.Series) -> str:
@@ -60,37 +42,64 @@ def _wine_to_url(row: pd.Series) -> str:
 
 
 def _name_similarity(query: str, name: str) -> float:
-    """Score how well *query* matches *name* (0-1).
+    """Score how well *query* matches *name* (0-2).
 
-    Combines substring presence with SequenceMatcher ratio so that
-    exact substring hits rank highest, but close misspellings still
-    surface.
+    Exact substring hits get a 1.0 boost; otherwise falls back to
+    SequenceMatcher ratio for fuzzy matching.
     """
     q = query.lower().replace("-", " ")
     n = name.lower().replace("-", " ")
-    # Exact substring → boost
+    # Exact substring → high score without expensive SequenceMatcher
     if q in n:
-        return 1.0 + SequenceMatcher(None, q, n).ratio()
+        # Prefer shorter names (more specific match)
+        return 1.0 + len(q) / max(len(n), 1)
     return SequenceMatcher(None, q, n).ratio()
 
 
 def search_wines_by_name(query: str, limit: int = 20) -> list[dict]:
     """Fuzzy-search wines by full name (wine + winery). Returns a ranked list of candidates."""
+    t0 = time.perf_counter()
     wines = _get_wines_light()
     full_names = (
         wines["wine_seo_name"].fillna("")
         + " "
         + wines["winery_seo_name"].fillna("")
     )
-    scores = full_names.apply(lambda n: _name_similarity(query, n))
-    # Keep only wines with some minimal similarity
+
+    query_lower = query.lower().replace("-", " ")
+    query_words = query_lower.split()
+
+    # Fast pre-filter: keep only wines where at least one query word appears
+    names_lower = full_names.str.lower().str.replace("-", " ", regex=False)
+    mask_candidate = names_lower.str.contains(query_words[0], case=False, na=False, regex=False)
+    for word in query_words[1:]:
+        mask_candidate |= names_lower.str.contains(word, case=False, na=False, regex=False)
+
+    candidates = wines.loc[mask_candidate]
+    candidate_names = full_names.loc[mask_candidate]
+    logger.debug("search_wines_by_name(%r): pre-filter kept %d / %d wines", query, len(candidate_names), len(full_names))
+
+    if candidate_names.empty:
+        # No substring matches — fall back to fuzzy on a sample to stay fast
+        if len(full_names) > 2000:
+            sample_idx = full_names.sample(2000, random_state=42).index
+            candidate_names = full_names.loc[sample_idx]
+            candidates = wines.loc[sample_idx]
+        else:
+            candidate_names = full_names
+            candidates = wines
+        logger.debug("search_wines_by_name(%r): no substring hits, fuzzy fallback on %d wines", query, len(candidate_names))
+
+    scores = candidate_names.apply(lambda n: _name_similarity(query, n))
     mask = scores > 0.3
     if not mask.any():
+        logger.info("search_wines_by_name(%r): no results (%.3fs)", query, time.perf_counter() - t0)
         return []
 
-    scored = wines.loc[mask].copy()
+    scored = candidates.loc[mask].copy()
     scored["_score"] = scores.loc[mask]
     scored = scored.sort_values("_score", ascending=False).head(limit)
+    logger.info("search_wines_by_name(%r): returning %d results (%.3fs)", query, len(scored), time.perf_counter() - t0)
 
     candidates = []
     for pos_idx, (_, row) in enumerate(scored.iterrows()):
@@ -113,21 +122,25 @@ def search_wines_by_name(query: str, limit: int = 20) -> list[dict]:
 
 def find_similar_wines(wine_idx: int, k: int = 5) -> dict:
     """Find wines with similar flavour profiles to the wine at *wine_idx*."""
+    t0 = time.perf_counter()
     idx = get_wine_index()
+    logger.debug("find_similar_wines(%d): index ready in %.3fs", wine_idx, time.perf_counter() - t0)
 
     if wine_idx < 0 or wine_idx >= len(idx.wines):
+        logger.warning("find_similar_wines(%d): index out of range (dataset has %d wines)", wine_idx, len(idx.wines))
         return {"query_wine": None, "matches": []}
 
-    query_point = idx.x_embedded[wine_idx].reshape(1, -1)
+    query_point = idx.embeddings[wine_idx]
     query_wine = idx.wines.iloc[wine_idx]
 
-    dist, ind = idx.tree.query(query_point, k=k + 1)
-    result = idx.wines.iloc[ind[0]].copy()
-    result["distance"] = dist[0]
-    result = result[result.index != wine_idx].head(k)
+    # Fast vectorized distance computation on precomputed embeddings
+    dists = np.linalg.norm(idx.embeddings - query_point, axis=1)
+    dists[wine_idx] = np.inf
+    top_indices = np.argsort(dists)[:k]
 
     matches = []
-    for _, row in result.iterrows():
+    for i in top_indices:
+        row = idx.wines.iloc[i]
         year = row.get("year", "")
         region = row.get("region_seo_name", "")
         matches.append(
@@ -138,11 +151,15 @@ def find_similar_wines(wine_idx: int, k: int = 5) -> dict:
                 "year": "" if pd.isna(year) else year,
                 "region": "" if pd.isna(region) else region,
                 "rating": round(float(row.get("ratings_average", 0) or 0), 2),
-                "distance": round(float(row.get("distance", 0)), 4),
+                "distance": round(float(dists[i]), 4),
                 "url": _wine_to_url(row),
             }
         )
 
+    logger.info(
+        "find_similar_wines(%d): found %d matches in %.3fs",
+        wine_idx, len(matches), time.perf_counter() - t0,
+    )
     return {
         "query_wine": {
             "name": query_wine.get("wine_seo_name", ""),
@@ -210,9 +227,13 @@ def search_foods(query: str, limit: int = 20) -> list[str]:
 @functools.lru_cache(maxsize=1)
 def get_all_foods() -> list[str]:
     """Return all food names for the searchable dropdown."""
+    logger.info("Loading all foods list...")
+    t0 = time.perf_counter()
     foods = _load_food_list()
     food_col = foods.columns[0]
-    return foods[food_col].str.strip().dropna().tolist()
+    result = foods[food_col].str.strip().dropna().tolist()
+    logger.info("Foods cache ready: %d foods in %.2fs", len(result), time.perf_counter() - t0)
+    return result
 
 
 def _build_food_profile(food_name: str) -> dict[str, tuple[float, int]]:
@@ -397,6 +418,7 @@ def _pairing_score(wine_tastes: dict[str, int], food_levels: dict[str, int]) -> 
 
 def pair_wine_to_food(food_name: str, k: int = 10) -> dict:
     """Find wines that pair with a food and return comparison data for visualization."""
+    t0 = time.perf_counter()
     food_profile = _build_food_profile(food_name)
     food_weight = food_profile.get("weight", (0.5, 2))
 
@@ -455,6 +477,7 @@ def pair_wine_to_food(food_name: str, k: int = 10) -> dict:
 
     # Sort by match score descending
     wines.sort(key=lambda w: w["match"], reverse=True)
+    logger.info("pair_wine_to_food(%r): returning %d wines (%.3fs)", food_name, len(wines), time.perf_counter() - t0)
 
     return {
         "food_name": food_name,

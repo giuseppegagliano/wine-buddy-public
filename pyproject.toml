@@ -6,11 +6,7 @@ requires-python = ">=3.10"
 dependencies = [
     "numpy",
     "pandas",
-    "requests",
-    "scikit-learn",
-    "seaborn",
-    "matplotlib",
-    "jupyterlab",
+    "pyarrow",
     "flask>=3.1.3",
     "gunicorn>=25.1.0",
     "pyarrow>=23.0.1",
@@ -52,5 +48,10 @@ known-first-party = ["uain"]
 [dependency-groups]
 dev = [
     "pre-commit>=4.5.1",
+    "requests",
     "ruff>=0.15.5",
+    "scikit-learn",
+    "seaborn",
+    "matplotlib",
+    "jupyterlab",
 ]
