@@ -206,12 +206,12 @@ def find_similar_wines(wine_idx: int, k: int = 5) -> dict:
 # The taste dimensions we compare between wine and food
 _TASTE_DIMENSIONS = ("sweet", "acid", "salt", "piquant", "fat", "bitter")
 _TASTE_LABELS = {
-    "sweet": "Sweetness / Dolcezza",
-    "acid": "Acidity / Acidit\u00e0",
-    "salt": "Saltiness / Intensit\u00e0",
-    "piquant": "Spiciness / Effervescenza",
-    "fat": "Fattiness / Corpo",
-    "bitter": "Bitterness / Tannicit\u00e0",
+    "sweet": "Sweetness",
+    "acid": "Acidity",
+    "salt": "Saltiness",
+    "piquant": "Spiciness",
+    "fat": "Fattiness",
+    "bitter": "Bitterness",
 }
 
 # Wine structure features for the AIS-style wine radar (raw columns, ~1-5 scale)
@@ -224,12 +224,12 @@ _WINE_STRUCTURE_KEYS = (
     "structure_fizziness",
 )
 _WINE_STRUCTURE_LABELS = {
-    "structure_sweetness": "Dolcezza",
-    "structure_acidity": "Acidit\u00e0",
-    "structure_tannin": "Tannicit\u00e0",
-    "style_body": "Corpo",
-    "structure_intensity": "Intensit\u00e0",
-    "structure_fizziness": "Effervescenza",
+    "structure_sweetness": "Sweetness",
+    "structure_acidity": "Acidity",
+    "structure_tannin": "Tannicity",
+    "style_body": "Body",
+    "structure_intensity": "Intensity",
+    "structure_fizziness": "Fizziness",
 }
 
 # Wine structure column → taste dimension mapping
