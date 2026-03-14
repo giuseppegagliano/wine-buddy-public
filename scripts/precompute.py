@@ -201,7 +201,7 @@ def main() -> None:
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         zf.write(parquet_path, parquet_path.name)
         for name in ("list_of_foods.csv", "descriptor_mapping_tastes.csv"):
-            p = DATA_DIR / "csv" / name
+            p = DATA_DIR / name
             if p.exists():
                 zf.write(p, name)
 

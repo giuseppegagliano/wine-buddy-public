@@ -56,12 +56,12 @@ def _build_embedding(wines: pd.DataFrame) -> tuple[np.ndarray, pd.DataFrame, lis
 
 
 def _load_food_list() -> pd.DataFrame:
-    path = DATA_DIR / "csv" / "list_of_foods.csv"
+    path = DATA_DIR / "list_of_foods.csv"
     return pd.read_csv(path)
 
 
 def _load_descriptor_tastes() -> pd.DataFrame:
-    path = DATA_DIR / "csv" / "descriptor_mapping_tastes.csv"
+    path = DATA_DIR / "descriptor_mapping_tastes.csv"
     return pd.read_csv(path)
 
 
