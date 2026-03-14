@@ -17,8 +17,11 @@
       </button>
       <div class="nav-links">
         <a href="/find-similar" class="{% if request.path == '/find-similar' or request.path == '/' %}active{% endif %}">Find Similar</a>
-        <a href="#" class="disabled" title="Coming soon">Pair to Food</a>
+        <a href="/pair-to-food" class="{% if request.path == '/pair-to-food' %}active{% endif %}">Pair to Food</a>
         <a href="#" class="disabled" title="Coming soon">Explore</a>
+        <button class="theme-toggle" aria-label="Toggle dark mode" onclick="toggleTheme()">
+          <span class="theme-icon"></span>
+        </button>
       </div>
     </div>
   </nav>
@@ -30,5 +33,19 @@
   <footer class="footer">
     <p>Wine Buddy &mdash; open-source wine analysis</p>
   </footer>
+  <script>
+    function toggleTheme() {
+      const html = document.documentElement;
+      const dark = html.getAttribute('data-theme') === 'dark';
+      html.setAttribute('data-theme', dark ? 'light' : 'dark');
+      localStorage.setItem('theme', dark ? 'light' : 'dark');
+    }
+    // restore saved preference
+    (function() {
+      const saved = localStorage.getItem('theme')
+        || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', saved);
+    })();
+  </script>
 </body>
 </html>

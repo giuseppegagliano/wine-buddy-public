@@ -7,15 +7,91 @@ import logging
 import numpy as np
 import pandas as pd
 
-from uain.config import DATA_DIR, FOOD_WEIGHTS
-from uain.rules import nonaroma_rules
-from uain.services import get_wine_index
+from uain.config import DATA_DIR, FOOD_WEIGHTS, WINE_WEIGHTS
+from uain.scraper.parsing import get_flavour, load_wines
+from uain.pairing.rules import nonaroma_rules
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Data loading helpers
+# ---------------------------------------------------------------------------
+
+
+def _load_wines() -> pd.DataFrame:
+    """Load wines from the unified Parquet file."""
+    try:
+        wines = load_wines()
+    except FileNotFoundError:
+        print(
+            f"No wine data found in {DATA_DIR}/. Run the scraper first.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    flavours = get_flavour(wines)
+    wines = wines.merge(flavours, on="id")
+    wines = wines.drop(
+        columns=[c for c in ("flavor", "style_food", "style_grapes") if c in wines.columns],
+    )
+    return wines
+
+
+def _build_embedding(wines: pd.DataFrame) -> tuple[np.ndarray, pd.DataFrame, list[str]]:
+    """Build feature matrix and embed wines, return (x_embedded, df, features).
+
+    Uses the same pipeline as scripts/precompute.py:
+    structure + flavor scores + grape indicators → StandardScaler → PCA.
+    """
+    from scripts.precompute import _build_feature_matrix, _compute_embeddings
+
+    feature_df = _build_feature_matrix(wines)
+    feature_cols = [c for c in feature_df.columns if c != "id"]
+    search_emb, _viz_emb, _explained = _compute_embeddings(feature_df)
+    return search_emb, feature_df, feature_cols
+
+
+def _load_food_list() -> pd.DataFrame:
+    path = DATA_DIR / "csv" / "list_of_foods.csv"
+    return pd.read_csv(path)
+
+
+def _load_descriptor_tastes() -> pd.DataFrame:
+    path = DATA_DIR / "csv" / "descriptor_mapping_tastes.csv"
+    return pd.read_csv(path)
+
+
+def _score_to_level(value: float, weight_map: dict[int, tuple[float, float]]) -> int:
+    """Map a continuous 0-1 score to a discrete 1-4 level."""
+    for level in sorted(weight_map.keys()):
+        lo, hi = weight_map[level]
+        if lo <= value <= hi:
+            return level
+    return max(weight_map.keys())
+
+
+def _wine_taste_profile(wine_row: pd.Series) -> dict[str, tuple[float, int]]:
+    """Build a discrete taste profile from a wine row's structure columns."""
+    mapping = {
+        "weight": "style_body",
+        "sweet": "structure_sweetness",
+        "acid": "structure_acidity",
+        "bitter": "structure_tannin",  # tannin maps to bitterness perception
+        "salt": "structure_intensity",  # intensity as a proxy
+        "piquant": "structure_fizziness",  # fizziness as a proxy
+        "fat": "style_body",  # body also correlates with mouthfeel/fat
+        "tannin": "structure_tannin",
+    }
+    profile = {}
+    for taste, col in mapping.items():
+        raw = float(wine_row.get(col, 0) or 0)
+        level = _score_to_level(raw, WINE_WEIGHTS.get(taste, WINE_WEIGHTS["weight"]))
+        profile[taste] = (raw, level)
+    return profile
 
 
 # ---------------------------------------------------------------------------
@@ -49,16 +125,12 @@ def cmd_find_wine_like(args: argparse.Namespace) -> None:
 
     print(f'Wines similar to "{query_wine["wine_seo_name"]}" ({query_wine.get("winery_seo_name", "")}):\n')
 
-    dists = np.linalg.norm(idx.embeddings - query_point, axis=1)
-    dists[query_pos] = np.inf
-    top_indices = np.argsort(dists)[:k]
-
-    result = idx.wines.iloc[top_indices].copy()
-    result["distance"] = dists[top_indices]
-    result["url"] = result.apply(
-        lambda r: "https://www.google.com/search?q="
-        + "+".join(f"{r['wine_seo_name']} {r['winery_seo_name']}".split()),
-        axis=1,
+    dist, ind = tree.query(query_point, k=k + 1)  # +1 because the wine itself is included
+    result = wines.iloc[ind[0]].copy()
+    result["distance"] = dist[0]
+    result = result[result.index != query_idx].head(k)
+    result["url"] = result["wine_id"].apply(
+        lambda wid: f"https://www.vivino.com/w/{int(wid)}"
     )
 
     display_cols = [
@@ -122,9 +194,30 @@ def cmd_pair_wine_to(args: argparse.Namespace) -> None:
 
     food_weight = taste_profile.get("weight", (0.5, 2))
 
-    # Taste levels are already precomputed in the parquet
-    idx = get_wine_index()
-    wine_df = idx.wines.copy()
+    # load wines and build taste columns
+    wines = _load_wines()
+    wine_df = wines.copy()
+
+    # map wine structure columns to the taste columns the rules expect
+    col_map = {
+        "weight": "style_body",
+        "sweet": "structure_sweetness",
+        "acid": "structure_acidity",
+        "bitter": "structure_tannin",
+        "salt": "structure_intensity",
+        "piquant": "structure_fizziness",
+        "fat": "style_body",
+        "tannin": "structure_tannin",
+    }
+    for taste, source in col_map.items():
+        if source in wine_df.columns:
+            raw = wine_df[source].fillna(0).astype(float)
+            # normalize 1-5 scale to 0-1 for WINE_WEIGHTS lookup
+            normalized = ((raw - 1) / 4).clip(0, 1)
+            wmap = WINE_WEIGHTS.get(taste, WINE_WEIGHTS["weight"])
+            wine_df[taste] = normalized.apply(lambda v, wm=wmap: _score_to_level(v, wm))
+        else:
+            wine_df[taste] = 2
 
     paired = nonaroma_rules(wine_df, taste_profile, food_weight)
 

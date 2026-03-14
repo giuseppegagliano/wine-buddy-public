@@ -2,12 +2,16 @@
 from __future__ import annotations
 
 import functools
+import logging
+import time
 from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
 
 from uain.config import DATA_DIR
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -20,9 +24,20 @@ class WineIndex:
 def get_wine_index() -> WineIndex:
     path = DATA_DIR / "wines_precomputed.parquet"
     if not path.exists():
-        raise FileNotFoundError(f"Precomputed data not found: {path}. Run scripts/precompute.py first.")
+        raise FileNotFoundError(
+            f"Precomputed data not found: {path}. "
+            "Run 'python scripts/precompute.py' first, then upload to GDrive."
+        )
+    logger.info("Loading precomputed wine index from %s", path)
+    t0 = time.perf_counter()
     wines = pd.read_parquet(path)
-    embeddings = wines[["pca_0", "pca_1"]].to_numpy()
+    # Use higher-dim search embeddings if available, fall back to 2D viz embeddings
+    emb_cols = sorted([c for c in wines.columns if c.startswith("emb_")])
+    if emb_cols:
+        embeddings = wines[emb_cols].to_numpy()
+    else:
+        embeddings = wines[["pca_0", "pca_1"]].to_numpy()
+    logger.info("Wine index loaded: %d wines in %.2fs", len(wines), time.perf_counter() - t0)
     return WineIndex(wines=wines, embeddings=embeddings)
 
 
