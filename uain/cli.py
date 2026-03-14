@@ -6,6 +6,9 @@ import logging
 
 import numpy as np
 import pandas as pd
+from sklearn.decomposition import PCA
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
 
 from uain.config import DATA_DIR, FOOD_WEIGHTS, WINE_WEIGHTS
 from uain.scraper.parsing import get_flavour, load_wines

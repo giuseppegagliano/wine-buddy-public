@@ -23,25 +23,17 @@ class WineIndex:
 @functools.lru_cache(maxsize=1)
 def get_wine_index() -> WineIndex:
     path = DATA_DIR / "wines_precomputed.parquet"
-    if path.exists():
-        logger.info("Loading precomputed wine index from %s", path)
-        t0 = time.perf_counter()
-        wines = pd.read_parquet(path)
-        embeddings = wines[["pca_0", "pca_1"]].to_numpy()
-        logger.info("Wine index loaded: %d wines in %.2fs", len(wines), time.perf_counter() - t0)
-        return WineIndex(wines=wines, embeddings=embeddings)
-
-    # Fallback: compute embeddings on the fly from raw data (slower first call)
-    logger.warning("Precomputed parquet not found at %s — computing embeddings on the fly (slow)", path)
-    from uain.cli import _build_embedding, _load_wines
-
+    if not path.exists():
+        raise FileNotFoundError(
+            f"Precomputed data not found: {path}. "
+            "Run 'python scripts/precompute.py' first, then upload to GDrive."
+        )
+    logger.info("Loading precomputed wine index from %s", path)
     t0 = time.perf_counter()
-    wines = _load_wines()
-    logger.info("Loaded %d wines in %.2fs, building embeddings...", len(wines), time.perf_counter() - t0)
-    t1 = time.perf_counter()
-    x_embedded, _, _ = _build_embedding(wines)
-    logger.info("Embeddings built in %.2fs", time.perf_counter() - t1)
-    return WineIndex(wines=wines, embeddings=x_embedded)
+    wines = pd.read_parquet(path)
+    embeddings = wines[["pca_0", "pca_1"]].to_numpy()
+    logger.info("Wine index loaded: %d wines in %.2fs", len(wines), time.perf_counter() - t0)
+    return WineIndex(wines=wines, embeddings=embeddings)
 
 
 def find_similar(query: str, k: int = 5) -> dict:

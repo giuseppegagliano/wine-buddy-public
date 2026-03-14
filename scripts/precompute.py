@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Precompute wine embeddings and taste levels for lightweight serving."""
+"""Precompute wine embeddings and taste levels for lightweight serving.
+
+Run once offline, then upload the resulting precomputed.zip to GDrive.
+"""
 from __future__ import annotations
 
 import sys
@@ -14,17 +17,24 @@ from sklearn.preprocessing import StandardScaler
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from uain.config import COUNTRY_CODE, DATA_DIR, WINE_WEIGHTS
-from uain.parsing import get_flavour
+from uain.config import DATA_DIR, WINE_WEIGHTS
+from uain.scraper.parsing import load_wines
 
 METADATA_COLS = [
     "id",
+    "wine_id",
     "wine_seo_name",
     "winery_seo_name",
     "wine_type",
     "year",
     "region_seo_name",
     "ratings_average",
+    "structure_sweetness",
+    "structure_acidity",
+    "structure_tannin",
+    "style_body",
+    "structure_intensity",
+    "structure_fizziness",
 ]
 
 STRUCTURE_TO_TASTE = {
@@ -48,31 +58,29 @@ def _score_to_level(value: float, weight_map: dict[int, tuple[float, float]]) ->
 
 
 def main() -> None:
-    frames = []
-    for color in ("red", "white", "sparkling"):
-        path = DATA_DIR / f"{COUNTRY_CODE.lower()}_{color}.csv"
-        if path.exists():
-            frames.append(pd.read_csv(path))
-    if not frames:
-        print(f"No wine data in {DATA_DIR}/", file=sys.stderr)
-        sys.exit(1)
-
-    wines = pd.concat(frames).reset_index(drop=True)
-    flavours = get_flavour(wines)
-    wines = wines.merge(flavours, on="id")
+    print("Loading wines from parquet...")
+    wines = load_wines()
     wines = wines.drop(
         columns=[c for c in ("flavor", "style_food", "style_grapes") if c in wines.columns],
     )
+    print(f"Loaded {len(wines)} wines")
 
     # PCA embeddings
+    print("Computing PCA embeddings...")
     df = wines.copy()
     for col in ("winery_seo_name", "region_seo_name"):
         if col in df.columns:
-            ohe = pd.get_dummies(df[col])
+            ohe = pd.get_dummies(df[col], prefix=col)
             df = df.drop(columns=col).join(ohe)
 
-    id_cols = {"id", "wine_id", "wine_seo_name", "region_country_code", "wine_type"}
-    features = [c for c in df.columns if c not in id_cols]
+    exclude = {
+        "id", "wine_id", "wine_seo_name", "country_code", "wine_type",
+        "vintage_name", "vintage_seo_name", "wine_name", "winery_name",
+        "region_name", "region_name_en", "country_name",
+        "style_name", "style_seo_name", "style_body_description",
+        "style_acidity_description", "price_currency",
+    }
+    features = [c for c in df.columns if c not in exclude and df[c].dtype != "object"]
     df[features] = df[features].apply(pd.to_numeric, errors="coerce").fillna(0)
 
     pca = make_pipeline(StandardScaler(), PCA(n_components=2, random_state=0))
@@ -104,7 +112,7 @@ def main() -> None:
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         zf.write(parquet_path, parquet_path.name)
         for name in ("list_of_foods.csv", "descriptor_mapping_tastes.csv"):
-            p = DATA_DIR / name
+            p = DATA_DIR / "csv" / name
             if p.exists():
                 zf.write(p, name)
 
