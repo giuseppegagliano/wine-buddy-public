@@ -299,6 +299,14 @@ a.card:has(.badge.pink) { border-left-color: var(--pink); }
   color: var(--muted);
   border-top: 1px solid var(--border);
 }
+.footer-link {
+  color: var(--accent);
+  text-decoration: none;
+  transition: color .15s;
+}
+.footer-link:hover {
+  color: var(--accent-l);
+}
 
 /* ---------- Selectable cards (step 1 — pick a wine) ---------- */
 .card-selectable {
@@ -769,3 +777,49 @@ a.card:has(.badge.pink) { border-left-color: var(--pink); }
 
 /* ---------- Loading state ---------- */
 .search-form.loading button { opacity: .6; pointer-events: none; }
+
+/* ---------- Privacy page ---------- */
+.privacy-content {
+  max-width: 700px;
+  line-height: 1.7;
+}
+.privacy-content h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  letter-spacing: -.02em;
+}
+.privacy-content h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-top: 1.75rem;
+  margin-bottom: .75rem;
+  color: var(--accent);
+}
+.privacy-content h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin-top: 1.25rem;
+  margin-bottom: .5rem;
+}
+.privacy-content p {
+  margin-bottom: 1rem;
+}
+.privacy-content ul, .privacy-content ol {
+  margin-left: 1.5rem;
+  margin-bottom: 1rem;
+}
+.privacy-content li {
+  margin-bottom: .5rem;
+}
+.privacy-content a {
+  color: var(--accent);
+  text-decoration: none;
+  transition: color .15s;
+}
+.privacy-content a:hover {
+  color: var(--accent-l);
+}
+.privacy-content strong {
+  font-weight: 600;
+}

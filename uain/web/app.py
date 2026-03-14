@@ -54,6 +54,11 @@ def index() -> str:
     return render_template("find_similar.html")
 
 
+@app.route("/privacy")
+def privacy() -> str:
+    return render_template("privacy.html")
+
+
 @app.route("/find-similar", methods=["GET", "POST"])
 def find_similar() -> str:
     results = None
