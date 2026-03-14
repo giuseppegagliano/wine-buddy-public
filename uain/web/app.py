@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import logging
+import os
 
 from flask import Flask, jsonify, render_template, request
+import sentry_sdk
+from sentry_sdk.integrations.flask import FlaskIntegration
 
 from uain.web.services import (
     find_similar_wines,
@@ -18,6 +21,30 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)-8s [%(name)s] %(message)s",
     datefmt="%H:%M:%S",
 )
+
+# Initialize Sentry if DSN is provided
+sentry_dsn = os.environ.get("SENTRY_DSN")
+if sentry_dsn:
+
+    def before_send(event, hint):
+        """Filter sensitive data for GDPR compliance.
+
+        Only track performance metrics and errors, not user data.
+        """
+        # Remove request body to avoid accidental data leakage
+        if "request" in event:
+            event["request"].pop("data", None)
+            event["request"].pop("cookies", None)
+        return event
+
+    sentry_sdk.init(
+        dsn=sentry_dsn,
+        integrations=[FlaskIntegration()],
+        traces_sample_rate=0.1,  # Track 10% of transactions for performance
+        environment=os.environ.get("ENVIRONMENT", "production"),
+        send_default_pii=False,  # GDPR: Don't send IP addresses or user identifiers
+        before_send=before_send,  # Additional filtering for sensitive data
+    )
 
 app = Flask(__name__)
 
