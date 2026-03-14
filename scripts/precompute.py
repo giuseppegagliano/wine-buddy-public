@@ -200,6 +200,10 @@ def main() -> None:
     zip_path = DATA_DIR / "precomputed.zip"
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         zf.write(parquet_path, parquet_path.name)
+        # Include raw wines.parquet for /pair-to-food endpoint
+        wines_path = DATA_DIR / "wines.parquet"
+        if wines_path.exists():
+            zf.write(wines_path, wines_path.name)
         for name in ("list_of_foods.csv", "descriptor_mapping_tastes.csv"):
             p = DATA_DIR / name
             if p.exists():
